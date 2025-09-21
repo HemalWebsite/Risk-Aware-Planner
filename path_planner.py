@@ -1,220 +1,121 @@
 
-# """
-#     This module is your primary workspace. Add whatever helper functions, classes, data structures, imports... etc here.
 
-#     We expect most results will utilize more than just dumping code into the plan_paths()
-#         function, that just serves as a meaningful entry point.
-
-#     In order for the rest of the scoring to work, you need to make sure you have correctly
-#         populated the Destination.path for each result you produce.
-# """
-# import typing
-# from queue import PriorityQueue
-
-# import numpy as np
-# from typing import Dict
-
-# from map_info import Coordinate, Destination, MapInfo
-
-
-# class PathPlanner:
-#     def __init__(self, map_info: MapInfo, destinations: typing.List["Destination"]):
-#         self.map_info: MapInfo = map_info
-#         self.destinations: typing.List["Destination"] = destinations
-
-#     def plan_paths(self):
-#         """
-#         This is the function you should re-write. It is expected to mutate the list of
-#         destinations by calling each Destination's set_path() with the resulting
-#         path as an argument.
-
-#         The default construction shows this format, and should produce 10 invalid paths.
-#         """
-#         for site in self.destinations:
-#             # YOUR CODE REPLACES THIS / WILL PLUG IN HERE
-#             path_array = np.linspace(self.map_info.start_coord, site.coord, 10)
-#             path_coords = [Coordinate(arr[0], arr[1]) for arr in path_array]
-
-#             # Once you have a solution for the site - populate it like this:
-#             site.set_path(path_coords)
-
-
-
-
-
-
-
-
-
-
-
-"""
-    This module is your primary workspace. Add whatever helper functions, classes, data structures, imports... etc here.
-
-    We expect most results will utilize more than just dumping code into the plan_paths()
-        function, that just serves as a meaningful entry point.
-
-    In order for the rest of the scoring to work, you need to make sure you have correctly
-        populated the Destination.path for each result you produce.
-"""
 import typing
+#Implements a priority queue using a binary heap, used for efficiently getting the node with the lowest cost.
 import heapq
 import math
-from typing import Dict
-
-# import numpy as np
-import numpy as np
-risk_zones = np.load('risk_zones.npy')
-print(risk_zones[26, 50])
-print([risk_zones[dest.n_coord, dest.e_coord] for dest in destinations])
-
-
 from map_info import Coordinate, Destination, MapInfo
+#Used for handling the risk map as a 2D array.
+import numpy as np
 
-
+# ----------------- Node -----------------
 class Node:
-   
-    def __init__(self, position: Coordinate, g=0, length=0, risk_cost=0, h=0, parent=None):
-        self.position = position
-        self.g = g                 # combined cost used for A* (depends on weights)
-        self.length = length       # actual distance traveled
-        self.risk_cost = risk_cost # accumulated risk
-        self.h = h
-        self.f = g + h
-        self.parent = parent
+    def __init__(self, position, g=0, length=0, risk_cost=0, h=0, parent=None):
+        self.position = position  # (e, n)
+        self.g = g                # total cost = alpha*length + beta*risk
+        self.length = length      # actual distance traveled
+        self.risk_cost = risk_cost # How much risk has been accumlated
+        self.h = h # Estimated distnace to the goal
+        self.f = g + h # Total estimated cost
+        self.parent = parent # Pointer to the previous node in the path (to reconstruct the path).
 
     def __lt__(self, other):
-        
+        # Tells Python how to compare two Node objects (by f value)
         return self.f < other.f
 
-def heuristic(node: Coordinate, goal: Coordinate) -> float:
-    return math.sqrt((node[0] - goal[0])**2 + (node[1] - goal[1])**2)
+# ----------------- Heuristic -----------------
+def heuristic(a, b):
+    #Euclidean distance heuristic: Returns the straight line distance between 2 points
+    return math.hypot(a[0] - b[0], a[1] - b[1])
 
-def create_grid_graph(map_info: MapInfo, risk_zones: np.ndarray):
-    width = risk_zones.shape[1]  # number of columns
-    depth = risk_zones.shape[0]  # number of rows
-    graph = {}
+# ----------------- A* Search -----------------
+def astar_search(start, goal, max_range, risk_map, alpha=10000000.0, beta=100.0):
+    open_set = [] # Priority queue (nodes to explore next).
+    closed_set = set() # Already visited coordinates.
+    start_node = Node(start, g=0, length=0, risk_cost=0, h=heuristic(start, goal))
+    heapq.heappush(open_set, start_node) # Create the start node and push it into the open set
 
-    for i in range(width):
-        for j in range(depth):
-            current_coord = (i, j)
-            if risk_zones[j][i] == MapInfo.KEEP_OUT_VALUE:
-                continue
+    while open_set: # While they are still nodes left to explore
+        current = heapq.heappop(open_set) # Pop the node from the stack with the lowest f value
+        pos_int = (int(round(current.position[0])), int(round(current.position[1]))) 
 
-            neighbors = {}
-            directions = [
-                (-1, 0, 1), (1, 0, 1), (0, -1, 1), (0, 1, 1),
-                (-1, -1, math.sqrt(2)), (-1, 1, math.sqrt(2)),
-                (1, -1, math.sqrt(2)), (1, 1, math.sqrt(2))
-            ]
+        # Skip if already visited else mark as visitied
+        if pos_int in closed_set:
+            continue
+        closed_set.add(pos_int)
 
-            for dx, dy, step_cost in directions:
-                nx, ny = i + dx, j + dy
-                if 0 <= nx < width and 0 <= ny < depth and risk_zones[ny][nx] != MapInfo.KEEP_OUT_VALUE:
-                    neighbors[(nx, ny)] = step_cost
-
-            if neighbors:
-                graph[current_coord] = neighbors
-
-    return graph
-
-
-def astar_search(graph: Dict, start: Coordinate, goal: Coordinate, max_range: float, risk_map: np.ndarray) -> typing.List[Coordinate]:
-    open_set = []
-    closed_set = set()
-
-    start_node = Node(start, 0, heuristic(start, goal))
-    heapq.heappush(open_set, start_node)
-
-    while open_set:
-        current_node = heapq.heappop(open_set)
-
-        if current_node.position == goal:
+        # Goal reached if we are within 1 unit from the goal nod 
+        if heuristic(current.position, goal) < 1.0:
+            # Empty list that will eventually hold the coordinates of the path
             path = []
-            while current_node:
-                path.insert(0, current_node.position)
-                current_node = current_node.parent
+            # Loop until there are no more parents.
+            node = current
+            while node:
+                path.insert(0, (int(round(node.position[0])), int(round(node.position[1]))))
+                # Increment/Decrement Statement move one step backward
+                node = node.parent
             return path
 
-        closed_set.add(current_node.position)
+        # 8-connected neighbors: Diagonalls are sqrt 2 because of pythogarours equation
+        for dx, dy, step_cost in [(-1,0,1),(1,0,1),(0,-1,1),(0,1,1),
+                                  (-1,-1,math.sqrt(2)),(-1,1,math.sqrt(2)),
+                                  (1,-1,math.sqrt(2)),(1,1,math.sqrt(2))]:
+            nx, ny = pos_int[0] + dx, pos_int[1] + dy
 
-        for neighbor in graph.get(current_node.position, {}):
-            if neighbor in closed_set:
+            # Check bounds -- skip if its outside map boundaries
+            if nx < 0 or nx >= risk_map.shape[0] or ny < 0 or ny >= risk_map.shape[1]:
                 continue
             
-            nx, ny = neighbor
-            risk_val = risk_map[ny][nx]
-
-            step_length = graph[current_node.position][neighbor]
-            new_length = current_node.length + step_length
-            new_risk = current_node.risk_cost + risk_val
-
+            # Skip if cell is catagories as "KEEP_OUT"
+            risk_val = risk_map[nx, ny]
+            if risk_val == MapInfo.KEEP_OUT_VALUE:
+                continue
+            
+            # Skips if over max range
+            new_length = current.length + step_cost
             if new_length > max_range:
                 continue
 
-            # Tuned weights for balancing length and risk
-            alpha = 1.0  
-            beta = 100.0   
-
+            new_risk = current.risk_cost + (1.0 if risk_val == MapInfo.HIGH_RISK_VALUE else 0.0)
             new_g = alpha * new_length + beta * new_risk
-            heuristic_val = heuristic(neighbor, goal)
-            new_node = Node(neighbor, g=new_g, length=new_length, risk_cost=new_risk, h=heuristic_val, parent=current_node)
+            h = heuristic((nx, ny), goal)
 
-            existing_node = next((node for node in open_set if node.position == neighbor), None)
-            if existing_node and existing_node.g <= new_g:
-                continue
-
+            # Create a new node and push to the open set.
+            new_node = Node((nx, ny), g=new_g, length=new_length, risk_cost=new_risk, h=h, parent=current)
             heapq.heappush(open_set, new_node)
 
-    return None
+    return None  # no path found
 
+# ----------------- PathPlanner -----------------
 class PathPlanner:
-    def __init__(self, map_info: MapInfo, destinations: typing.List["Destination"]):
-        self.map_info: MapInfo = map_info
-        self.destinations: typing.List["Destination"] = destinations
-        self.graph = create_grid_graph(self.map_info, self.map_info.risk_zones)  # <-- updated here
+    def __init__(self, map_info: MapInfo, destinations: typing.List[Destination], alpha=1.0, beta=5.0):
+        self.map_info = map_info
+        self.destinations = destinations
+        self.risk_map = map_info.risk_zones
+        self.alpha = alpha
+        self.beta = beta
 
     def plan_paths(self):
-        # start_coord = (int(self.map_info.start_coord.e), int(self.map_info.start_coord.n))
-        # start_coord = (min(start_coord[0], risk_zones.shape[1]-1),
-        #        start_coord[1])
-        start_coord = (int(self.map_info.start_coord.e), int(self.map_info.start_coord.n))
+        # Gets starting coordinate from map, converts it to (int e, int n)
+        start_coord = self.map_info.start_coord
+        start_tuple = (int(round(start_coord.e)), int(round(start_coord.n)))
 
-        # clip to stay inside the map bounds
-        risk_zones = self.map_info.risk_zones
-        #getting out of bounds error
-        start_coord = (
-            min(max(int(self.map_info.start_coord.e), 0), risk_zones.shape[1]-1),
-            min(max(int(self.map_info.start_coord.n), 0), risk_zones.shape[0]-1)
-        )
-
+        # Convert to integer grid value 
         for site in self.destinations:
-            goal_coord = (int(site.coord.e), int(site.coord.n))
+            goal_coord = site.coord
+            goal_tuple = (int(round(goal_coord.e)), int(round(goal_coord.n)))
 
-            if start_coord not in self.graph:
-                print(f"Start coordinate {start_coord} is invalid (keep-out or out of bounds).")
-                site.set_path([])
-                continue
-
-            if goal_coord not in self.graph:
-                print(f"Goal coordinate {goal_coord} is invalid (keep-out or out of bounds).")
-                site.set_path([])
-                continue
-
-            
-            path_coords_tuple = astar_search(
-                self.graph,
-                start_coord,
-                goal_coord,
+            path_tuples = astar_search(
+                start_tuple,
+                goal_tuple,
                 self.map_info.maximum_range,
-                self.map_info.risk_zones  # <-- updated here
+                self.risk_map,
+                alpha=self.alpha,
+                beta=self.beta
             )
-            
-            if path_coords_tuple:
-                path_coords = [Coordinate(float(x), float(y)) for x, y in path_coords_tuple]
+
+            if path_tuples:
+                path_coords = [Coordinate(e, n) for e, n in path_tuples]
                 site.set_path(path_coords)
             else:
                 site.set_path([])
-
-
-
