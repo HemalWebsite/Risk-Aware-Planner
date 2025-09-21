@@ -1,34 +1,4 @@
-'0: Flamboyance':
-  errors:
-  - No path to site
-  length: .inf
-  risk: .inf
-  valid: false
 '1: Knot':
-  errors:
-  - No path to site
-  length: .inf
-  risk: .inf
-  valid: false
-'2: Chatter':
-  errors:
-  - No path to site
-  length: .inf
-  risk: .inf
-  valid: false
-'3: Deceit':
-  errors:
-  - No path to site
-  length: .inf
-  risk: .inf
-  valid: false
-'4: Conclave':
-  errors:
-  - No path to site
-  length: .inf
-  risk: .inf
-  valid: false
-'5: Mewing':
   errors:
   - No path to site
   length: .inf
@@ -40,21 +10,41 @@
   length: .inf
   risk: .inf
   valid: false
-'7: Bevy':
-  errors:
-  - No path to site
-  length: .inf
-  risk: .inf
-  valid: false
 '8: Wisdom':
   errors:
   - No path to site
   length: .inf
   risk: .inf
   valid: false
-'9: Flotilla':
-  errors:
-  - No path to site
-  length: .inf
-  risk: .inf
-  valid: false
+Bevy:
+  length: 36.8700576850888
+  risk: 9.0
+  valid: true
+Chatter:
+  length: 12.485281374238571
+  risk: 5.0
+  valid: true
+Conclave:
+  length: 45.94112549695427
+  risk: 14.0
+  valid: true
+Deceit:
+  length: 47.69848480983498
+  risk: 0.0
+  valid: true
+Flamboyance:
+  length: 18.071067811865476
+  risk: 0.0
+  valid: true
+Flotilla:
+  length: 36.4558441227157
+  risk: 7.0
+  valid: true
+Mewing:
+  length: 15.313708498984763
+  risk: 2.0
+  valid: true
+TEST:
+  length: 49.59797974644665
+  risk: 15.0
+  valid: true
